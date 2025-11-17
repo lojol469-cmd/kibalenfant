@@ -21,9 +21,9 @@ RUN npm ci --only=production && \
 
 # Copier le code source (uniquement Node.js)
 COPY server.js ./
+COPY cloudynary.js ./
 COPY routes/ ./routes/
 COPY controllers/ ./controllers/
-COPY services/ ./services/
 
 # Créer les dossiers nécessaires
 RUN mkdir -p uploads storage/temp
