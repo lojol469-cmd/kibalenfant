@@ -11,6 +11,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { WebSocketServer } = require('ws');
+const admin = require('firebase-admin');
 const { 
   uploadCloudinary, 
   publicationUpload, 
@@ -20,6 +21,34 @@ const {
   employeeUpload, 
   deleteFromCloudinary 
 } = require('./cloudynary');
+
+// ========================================
+// INITIALISATION FIREBASE ADMIN SDK
+// ========================================
+let firebaseInitialized = false;
+
+try {
+  const serviceAccountPath = path.join(__dirname, process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase/msdos-6eb64-firebase-adminsdk-fbsvc-4d32384129.json');
+  
+  if (fs.existsSync(serviceAccountPath)) {
+    const serviceAccount = require(serviceAccountPath);
+    
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: serviceAccount.project_id
+    });
+    
+    firebaseInitialized = true;
+    console.log('✅ Firebase Admin SDK initialisé');
+    console.log(`   Project ID: ${serviceAccount.project_id}`);
+  } else {
+    console.warn('⚠️ Fichier Firebase non trouvé:', serviceAccountPath);
+    console.warn('   Les notifications push ne fonctionneront pas');
+  }
+} catch (error) {
+  console.error('❌ Erreur initialisation Firebase:', error.message);
+  console.warn('   Les notifications push ne fonctionneront pas');
+}
 
 const app = express();
 
@@ -749,27 +778,65 @@ async function sendPushNotification(userId, notification) {
     await notifDoc.save();
     console.log(`✅ Notification enregistrée en DB pour user ${userId}`);
 
-    // Structure de la notification Firebase (si token disponible)
-    if (user && user.fcmToken) {
-      const message = {
-        to: user.fcmToken,
-        notification: {
-          title: notification.title,
-          body: notification.body,
-          sound: 'default',
-          badge: '1',
-        },
-        data: notification.data || {},
-        priority: 'high',
-        content_available: true,
-      };
+    // Envoyer la notification push via Firebase Cloud Messaging
+    if (firebaseInitialized && user && user.fcmToken) {
+      try {
+        const message = {
+          token: user.fcmToken,
+          notification: {
+            title: notification.title,
+            body: notification.body
+          },
+          data: {
+            ...notification.data,
+            notificationId: notifDoc._id.toString(),
+            timestamp: new Date().toISOString()
+          },
+          android: {
+            priority: 'high',
+            notification: {
+              sound: 'default',
+              channelId: 'center_notifications',
+              priority: 'high',
+              defaultSound: true,
+              defaultVibrateTimings: true
+            }
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: 'default',
+                badge: 1,
+                contentAvailable: true
+              }
+            }
+          }
+        };
 
-      // TODO: Implémenter l'envoi avec Firebase Admin SDK
-      // Pour l'instant, on log juste
-      console.log('📤 Notification à envoyer:', message);
+        const response = await admin.messaging().send(message);
+        console.log(`✅ Notification push envoyée via FCM:`, response);
+        console.log(`   User: ${user.email || userId}`);
+        console.log(`   Title: ${notification.title}`);
+        
+        return { success: true, messageId: response };
+      } catch (fcmError) {
+        // Gérer les erreurs spécifiques FCM
+        if (fcmError.code === 'messaging/invalid-registration-token' || 
+            fcmError.code === 'messaging/registration-token-not-registered') {
+          console.log(`⚠️ Token FCM invalide pour ${user.email}, suppression du token`);
+          user.fcmToken = null;
+          await user.save();
+        } else {
+          console.error('❌ Erreur FCM:', fcmError.message);
+        }
+        return { success: false, error: fcmError };
+      }
+    } else {
+      if (!firebaseInitialized) {
+        console.log('⚠️ Firebase non initialisé, notification enregistrée en DB uniquement');
+      }
+      return { success: true, dbOnly: true };
     }
-    
-    return { success: true };
   } catch (error) {
     console.error('❌ Erreur envoi notification:', error);
     return { success: false, error };
@@ -799,6 +866,10 @@ async function sendEmailNotification(userEmail, subject, htmlContent) {
     return { success: false, error };
   }
 }
+
+// Initialiser les fonctions de notification dans le controller
+const publicationController = require('./controllers/publicationController');
+publicationController.initNotifications(sendPushNotification, sendEmailNotification, BASE_URL);
 
 // Envoyer une notification à un utilisateur
 app.post('/api/notifications/send', verifyToken, async (req, res) => {
@@ -2151,22 +2222,118 @@ app.post('/api/publications/:pubId/comments/:commentId/like', verifyToken, async
 });
 
 app.post('/api/publications/:id/comments', verifyToken, async (req, res) => {
-  const { content } = req.body;
-  if (!content?.trim()) return res.status(400).json({ message: 'Commentaire requis' });
+  try {
+    const { content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ message: 'Commentaire requis' });
 
-  const pub = await Publication.findById(req.params.id);
-  if (!pub || !pub.isActive) return res.status(404).json({ message: 'Publication non trouvée' });
+    const pub = await Publication.findById(req.params.id).populate('userId', 'name email fcmToken notificationSettings');
+    if (!pub || !pub.isActive) return res.status(404).json({ message: 'Publication non trouvée' });
 
-  pub.comments.push({ userId: req.user.userId, content: content.trim() });
-  await pub.save();
+    // Récupérer les infos du commentateur
+    const commenter = await User.findById(req.user.userId).select('name email profileImage');
+    if (!commenter) return res.status(404).json({ message: 'Utilisateur non trouvé' });
 
-  const comment = pub.comments[pub.comments.length - 1];
-  await pub.populate('comments.userId', 'name email profileImage');
+    // Ajouter le commentaire
+    pub.comments.push({ userId: req.user.userId, content: content.trim() });
+    await pub.save();
 
-  res.status(201).json({ 
-    message: 'Commentaire ajouté',
-    comment: comment.toObject()
-  });
+    const comment = pub.comments[pub.comments.length - 1];
+    await pub.populate('comments.userId', 'name email profileImage');
+
+    // ✅ ENVOYER NOTIFICATION SI CE N'EST PAS L'AUTEUR QUI COMMENTE
+    if (pub.userId && pub.userId._id.toString() !== req.user.userId) {
+      const publicationAuthor = pub.userId;
+
+      // Notification Push
+      if (publicationAuthor.fcmToken && publicationAuthor.notificationSettings?.comments !== false) {
+        console.log(`\n📲 Envoi notification push pour commentaire`);
+        console.log(`De: ${commenter.name} (${commenter.email})`);
+        console.log(`À: ${publicationAuthor.name} (${publicationAuthor.email})`);
+        
+        await sendPushNotification(publicationAuthor._id, {
+          title: '💬 Nouveau commentaire',
+          body: `${commenter.name} a commenté: "${content.trim().substring(0, 50)}${content.length > 50 ? '...' : ''}"`,
+          data: {
+            type: 'comment',
+            publicationId: pub._id.toString(),
+            commentId: comment._id.toString(),
+            commenterName: commenter.name,
+            commenterAvatar: commenter.profileImage || '',
+            deepLink: `${BASE_URL}/publications/${pub._id}`
+          }
+        });
+      }
+
+      // Email de notification
+      if (publicationAuthor.email && publicationAuthor.notificationSettings?.emailNotifications !== false) {
+        console.log(`📧 Envoi email notification pour commentaire`);
+        
+        const publicationPreview = pub.content ? pub.content.substring(0, 100) : '[Publication avec média]';
+        const emailHtml = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background: linear-gradient(135deg, #00D4FF, #FFD700); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+              .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+              .comment-box { background: white; padding: 20px; border-left: 4px solid #00D4FF; margin: 20px 0; border-radius: 5px; }
+              .button { display: inline-block; padding: 12px 30px; background: #00D4FF; color: white; text-decoration: none; border-radius: 25px; margin: 20px 0; }
+              .footer { text-align: center; color: #999; font-size: 12px; margin-top: 30px; }
+              .avatar { width: 50px; height: 50px; border-radius: 50%; margin-right: 15px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>💬 Nouveau commentaire</h1>
+              </div>
+              <div class="content">
+                <p>Bonjour <strong>${publicationAuthor.name}</strong>,</p>
+                <p><strong>${commenter.name}</strong> a commenté votre publication :</p>
+                
+                <div class="comment-box">
+                  <p><strong>Commentaire :</strong></p>
+                  <p style="font-size: 16px;">"${content.trim()}"</p>
+                </div>
+
+                <p><strong>Votre publication :</strong></p>
+                <p style="color: #666; font-style: italic;">"${publicationPreview}${pub.content?.length > 100 ? '...' : ''}"</p>
+
+                <center>
+                  <a href="${BASE_URL}/publications/${pub._id}" class="button">Voir la publication</a>
+                </center>
+
+                <p style="color: #999; font-size: 14px; margin-top: 30px;">
+                  Cette notification a été envoyée automatiquement par Center App.
+                </p>
+              </div>
+              <div class="footer">
+                <p>© 2025 Center App. Tous droits réservés.</p>
+                <p>Gérez vos préférences de notification dans l'application</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `;
+
+        await sendEmailNotification(
+          publicationAuthor.email,
+          `💬 ${commenter.name} a commenté votre publication`,
+          emailHtml
+        );
+      }
+    }
+
+    res.status(201).json({ 
+      message: 'Commentaire ajouté',
+      comment: comment.toObject()
+    });
+  } catch (error) {
+    console.error('❌ Erreur ajout commentaire:', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
 });
 
 app.delete('/api/publications/:id/media/:mediaIndex', verifyToken, async (req, res) => {
