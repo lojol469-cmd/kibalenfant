@@ -102,6 +102,11 @@ app.use((req, res, next) => {
       if (typeof obj === 'string') {
         let result = obj;
         
+        // ✅ NE PAS toucher aux URLs Cloudinary
+        if (result.includes('res.cloudinary.com') || result.includes('cloudinary.com')) {
+          return result;
+        }
+        
         // ✅ REGEX INTELLIGENTE : Remplace TOUTES les IPs privées (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
         // Pattern pour détecter n'importe quelle IP dans une URL
         const ipUrlPattern = /http:\/\/((?:192\.168\.\d{1,3}\.\d{1,3})|(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3})|(?:172\.(?:1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3})|localhost|127\.0\.0\.1)(?::(\d+))?/g;
