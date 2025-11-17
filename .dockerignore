@@ -1,0 +1,69 @@
+# Python et IA (EXCLURE COMPLÈTEMENT)
+*.py
+*.pyc
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+chat_agent_api.py
+requirements*.txt
+
+# Dossiers IA/Python
+models/
+smolvlm_cache/
+mistral_models/
+stable_diffusion/
+tools/
+venv/
+env/
+ENV/
+.venv
+
+# Fichiers modèles volumineux
+*.gguf
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.h5
+*.pkl
+
+# Cache et logs
+.cache/
+*.log
+logs/
+
+# Données temporaires
+storage/
+uploads/
+temp/
+
+# Node.js (garder pour réinstaller)
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Environnement local
+.env
+.env.local
+
+# Tests
+test/
+tests/
+*.test.py
+*.test.js
+
+# Documentation
+docs/
