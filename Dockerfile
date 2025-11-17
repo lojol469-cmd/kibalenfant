@@ -23,10 +23,9 @@ RUN npm ci --only=production && \
 COPY server.js ./
 COPY routes/ ./routes/
 COPY controllers/ ./controllers/
-COPY services/ ./services/
 
 # Créer les dossiers nécessaires
-RUN mkdir -p uploads storage/temp
+RUN mkdir -p uploads storage/temp services
 
 # Exposer le port
 EXPOSE 5000
