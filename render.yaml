@@ -1,9 +1,9 @@
 services:
-  # Backend Node.js
+  # Backend Node.js - CENTER
   - type: web
     name: center-backend-nodejs
     env: docker
-    dockerfilePath: ./Dockerfile.node
+    dockerfilePath: ./Dockerfile
     dockerContext: ./backend
     region: oregon
     plan: free
@@ -20,4 +20,11 @@ services:
         generateValue: true
       - key: ADMIN_SECRET_KEY
         generateValue: true
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
     autoDeploy: true
+

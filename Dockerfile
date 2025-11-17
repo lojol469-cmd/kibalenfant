@@ -16,16 +16,17 @@ WORKDIR /app
 COPY package*.json ./
 
 # Installer les dépendances en production
-RUN npm install --omit=dev && \
+RUN npm ci --only=production && \
     npm cache clean --force
 
 # Copier le code source (uniquement Node.js)
 COPY server.js ./
 COPY routes/ ./routes/
 COPY controllers/ ./controllers/
+COPY services/ ./services/
 
 # Créer les dossiers nécessaires
-RUN mkdir -p uploads storage/temp services
+RUN mkdir -p uploads storage/temp
 
 # Exposer le port
 EXPOSE 5000
@@ -36,3 +37,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 # Commande de démarrage
 CMD ["node", "server.js"]
+

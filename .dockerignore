@@ -1,6 +1,15 @@
-# Python et IA (EXCLURE COMPLÈTEMENT)
+# ========================================
+# .dockerignore - Backend Node.js CENTER
+# ========================================
+# EXCLUSION: Fichiers lourds et inutiles pour le déploiement
+
+# ========================================
+# PYTHON - TOUT EXCLURE (inutile pour Node.js)
+# ========================================
 *.py
 *.pyc
+*.pyo
+*.pyd
 __pycache__/
 *.py[cod]
 *$py.class
@@ -9,19 +18,19 @@ __pycache__/
 *.egg-info/
 chat_agent_api.py
 requirements*.txt
-
-# Dossiers IA/Python
-models/
-smolvlm_cache/
-mistral_models/
-stable_diffusion/
-tools/
 venv/
 env/
 ENV/
 .venv
+pip-log.txt
+.pytest_cache/
 
-# Fichiers modèles volumineux
+# ========================================
+# DOSSIERS LOURDS - IA/ML (EXCLURE)
+# ========================================
+smolvlm_cache/
+mistral_models/
+stable_diffusion/
 *.gguf
 *.bin
 *.safetensors
@@ -29,41 +38,85 @@ ENV/
 *.pth
 *.h5
 *.pkl
+*.model
 
-# Cache et logs
-.cache/
-*.log
-logs/
-
-# Données temporaires
+# ========================================
+# STOCKAGE LOCAL (Cloudinary utilisé)
+# ========================================
 storage/
 uploads/
 temp/
+*.tmp
+*.temp
 
-# Node.js (garder pour réinstaller)
+# ========================================
+# NODE.JS
+# ========================================
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn
 
-# IDE
+# ========================================
+# FICHIERS DE TEST
+# ========================================
+test/
+tests/
+test-*.js
+test-*.ps1
+test-*.sh
+check-user.js
+update-password.js
+*.test.js
+*.test.py
+*.spec.js
+
+# ========================================
+# DOCUMENTATION
+# ========================================
+README.md
+DEPLOY_GUIDE.md
+RECAP.md
+*.md
+docs/
+
+# ========================================
+# DOCKER
+# ========================================
+docker-compose*.yml
+Dockerfile
+.dockerignore*
+
+# ========================================
+# GIT
+# ========================================
+.git/
+.gitignore
+.gitattributes
+
+# ========================================
+# ENVIRONNEMENT LOCAL
+# ========================================
+.env
+.env.local
+.env.*.local
+
+# ========================================
+# IDE ET SYSTÈME
+# ========================================
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 .DS_Store
 Thumbs.db
 
-# Git
-.git/
-.gitignore
-
-# Environnement local
-.env
-.env.local
-
-# Tests
-test/
-tests/
-*.test.py
-*.test.js
-
-# Documentation
-docs/
+# ========================================
+# LOGS ET CACHE
+# ========================================
+.cache/
+*.log
+logs/
