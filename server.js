@@ -30,21 +30,28 @@ let firebaseInitialized = false;
 try {
   let serviceAccount;
   
-  // Option 1: Variable d'environnement JSON (pour Render)
-  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    console.log('📝 Chargement Firebase depuis variable d\'environnement');
+  // Option 1: Variable d'environnement JSON (pour Render/Production)
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    console.log('📝 Chargement Firebase depuis variable d\'environnement FIREBASE_SERVICE_ACCOUNT');
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  }
+  // Option 2: Ancienne variable pour compatibilité
+  else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    console.log('📝 Chargement Firebase depuis variable d\'environnement FIREBASE_SERVICE_ACCOUNT_JSON');
     serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
   } 
-  // Option 2: Fichier local (pour développement)
-  else {
-    const serviceAccountPath = path.join(__dirname, process.env.FIREBASE_SERVICE_ACCOUNT_PATH || './firebase/msdos-6eb64-firebase-adminsdk-fbsvc-4d32384129.json');
+  // Option 3: Fichier local (pour développement)
+  else if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+    const serviceAccountPath = path.join(__dirname, process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
     
     if (fs.existsSync(serviceAccountPath)) {
       console.log('📝 Chargement Firebase depuis fichier:', serviceAccountPath);
       serviceAccount = require(serviceAccountPath);
     } else {
-      throw new Error(`Fichier Firebase non trouvé: ${serviceAccountPath}`);
+      console.warn('⚠️ Fichier Firebase non trouvé:', serviceAccountPath);
     }
+  } else {
+    console.warn('⚠️ Aucune configuration Firebase trouvée (ni FIREBASE_SERVICE_ACCOUNT, ni FIREBASE_SERVICE_ACCOUNT_JSON, ni FIREBASE_SERVICE_ACCOUNT_PATH)');
   }
   
   if (serviceAccount) {
